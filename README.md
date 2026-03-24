@@ -30,9 +30,5 @@ This project deliberately avoids heavy frameworks to showcase powerful AI integr
    > *"Plan a 5-day solo trip to Tokyo next month focusing on anime culture and amazing street food, with a medium budget. Detail the transportation."*
 4. Click **Plan My Trip** and watch the magic happen in the Agent Console.
 
-## 🔐 API Key Notice
-
-The `app.js` file currently uses a hardcoded, client-side Hugging Face API key for demonstration purposes. 
-*Note: If you plan to deploy this application to a public server (like Vercel or GitHub Pages), it is highly recommended to move the API call to a minimal backend (like Node.js/Express) to secure your specific Hugging Face Access Token.*
 
 *Built to showcase the power of Agentic AI Reasoning Loops directly in the browser.*
