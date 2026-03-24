@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Trip Planner - Agentic System</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts for premium typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Marked.js for parsing Markdown to HTML -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- HTML2PDF.js for exporting styled PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1 class="gradient-text">AI Trip Planner</h1>
+            <p class="subtitle">Build your dream itinerary with our Agentic Workflow.</p>
+        </header>
+
+        <main>
+            <form id="trip-form" class="glass-panel">
+                <div class="form-group full-width">
+                    <label for="user-prompt">Describe Your Dream Trip</label>
+                    <textarea id="user-prompt" placeholder="e.g. I want a 5-day solo trip to Tokyo next month, focusing on anime culture and amazing street food, with a medium budget... " required></textarea>
+                </div>
+
+                <button type="submit" id="submit-btn" class="primary-btn">Plan My Trip</button>
+            </form>
+
+            <div id="agent-status" class="glass-panel hidden">
+                <div class="status-header">
+                    <div class="loader"></div>
+                    <p id="status-message" class="pulse-text">Initializing Agent Orchestration...</p>
+                </div>
+                
+                <ul class="agent-steps" id="agent-steps">
+                    <li id="step-1" class="pending">Architect (Live Chain-of-Thought)</li>
+                    <li id="step-2" class="pending">Synthesizer (Final Formatting)</li>
+                </ul>
+
+                <!-- New Agent Console -->
+                <div class="agent-console">
+                    <div class="console-header">
+                        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                        <span class="console-title">Live Chain-of-Thought</span>
+                    </div>
+                    <div id="console-output" class="console-body">
+                        <span class="console-system">> Waiting for agents to launch...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="results-container" class="glass-panel hidden">
+                <h2>Generated Itinerary</h2>
+                <div id="itinerary-content" class="markdown-body"></div>
+                <div class="action-buttons">
+                    <button id="download-btn" class="secondary-btn">Download PDF</button>
+                    <button id="reset-btn" class="ghost-btn">Plan Another Trip</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
