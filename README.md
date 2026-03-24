@@ -35,12 +35,4 @@ This project deliberately avoids heavy frameworks to showcase powerful AI integr
 The `app.js` file currently uses a hardcoded, client-side Hugging Face API key for demonstration purposes. 
 *Note: If you plan to deploy this application to a public server (like Vercel or GitHub Pages), it is highly recommended to move the API call to a minimal backend (like Node.js/Express) to secure your specific Hugging Face Access Token.*
 
-## 📸 Example UI
-
-*(Add screenshots of your UI here before you push!)*
-- Screenshot showing the sleek input box.
-- Screenshot showing the Live Chain-of-Thought console in action.
-- Screenshot showing the final generated markdown rendering.
-
----
 *Built to showcase the power of Agentic AI Reasoning Loops directly in the browser.*
