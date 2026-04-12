@@ -13,7 +13,19 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
-    <div class="app-container">
+    <div id="app-layout">
+        <!-- ChatGPT-style Sidebar -->
+        <aside class="sidebar">
+            <button id="new-chat-btn" class="ghost-btn sidebar-new-btn">+ New Trip Plan</button>
+            <div id="chat-history-list" class="chat-list">
+                <p class="sidebar-empty">Loading trips...</p>
+            </div>
+            <button id="clear-history-btn" class="ghost-btn danger-btn sidebar-clear-btn">Clear History</button>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <div class="app-container">
         <header>
             <h1 class="gradient-text">AI Trip Planner</h1>
             <p class="subtitle">Build your dream itinerary with our Agentic Workflow.</p>
@@ -55,12 +67,22 @@
             <div id="results-container" class="glass-panel hidden">
                 <h2>Generated Itinerary</h2>
                 <div id="itinerary-content" class="markdown-body"></div>
+                
+                <div class="follow-up-section" id="follow-up-section">
+                    <label for="follow-up-prompt">Want to make changes?</label>
+                    <div class="follow-up-input-group">
+                        <textarea id="follow-up-prompt" placeholder="e.g. 'Add a day focusing on museums' or 'Make the budget cheaper'"></textarea>
+                        <button id="follow-up-btn" class="primary-btn">Update</button>
+                    </div>
+                </div>
+
                 <div class="action-buttons">
                     <button id="download-btn" class="secondary-btn">Download PDF</button>
-                    <button id="reset-btn" class="ghost-btn">Plan Another Trip</button>
+                    <button id="reset-btn" class="ghost-btn">Start Over</button>
                 </div>
             </div>
         </main>
+        </div>
     </div>
 
     <script src="app.js"></script>
