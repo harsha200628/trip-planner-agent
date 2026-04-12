@@ -8,6 +8,7 @@ Instead of filling out tedious forms, simply describe your dream trip—where yo
 
 - **Single-Prompt Generation:** Drive the entire application via one intuitive text box. The AI extracts dates, locations, budgets, and constraints directly from natural language.
 - **Live Chain-of-Thought Streaming:** A custom "Agent Console" visually streams the AI's internal thought process in real-time, simulating how an expert travel agent or architect plans out transport logistics, budget viability, and daily pacing.
+- **ChatGPT-Style Sidebar Memory:** Seamlessly navigate between past trips using a dynamic, slide-out sidebar history list. All interactions are instantly saved and loaded locally using your browser's persistent `localStorage`.
 - **Ultra-Fast Single Pass Optimization:** We've rewritten the generation pipeline to combine previous multi-step LLM calls into a single, high-speed streaming generation, drastically reducing wait times.
 - **High-Fidelity Output:** Fully formatted markdown output covering a trip summary, day-by-day itineraries, exact cost breakdowns, and personalized travel tips.
 - **Premium Dark Mode UI:** A gorgeous, glassmorphic UI styled from scratch using vanilla CSS and Google "Inter" fonts, with elegant macro-animations representing the agent's computing status.
