@@ -31,6 +31,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function extractUserQuery(rawContent, msgIndex) {
+        if (msgIndex === 0 && rawContent.includes("User Request:")) {
+            const lines = rawContent.split('\n');
+            const userReqLine = lines.find(l => l.startsWith("User Request:"));
+            if (userReqLine) return userReqLine.replace("User Request:", "").trim();
+        }
+        if (rawContent.includes("CRITICAL INSTRUCTION:")) {
+             return rawContent.split("\n\nCRITICAL INSTRUCTION:")[0].trim();
+        }
+        return rawContent.trim();
+    }
+
+    function renderChatFeed() {
+        const container = document.getElementById('itinerary-content');
+        container.innerHTML = '';
+        
+        conversationHistory.forEach((msg, index) => {
+            const div = document.createElement('div');
+            if (msg.role === 'user') {
+                div.className = 'chat-message user-message';
+                div.textContent = extractUserQuery(msg.content, index);
+            } else if (msg.role === 'assistant') {
+                div.className = 'chat-message assistant-message markdown-body';
+                const thoughtEndToken = "</internal_thought>";
+                let textToRender = msg.content;
+                if (textToRender.includes(thoughtEndToken)) {
+                    textToRender = textToRender.split(thoughtEndToken)[1].trimStart();
+                }
+                textToRender = textToRender.replace(/```markdown|```/g, '');
+                div.innerHTML = marked.parse(textToRender);
+            }
+            container.appendChild(div);
+        });
+        
+        // Auto scroll to bottom
+        setTimeout(() => {
+            document.querySelector('.main-content').scrollTop = document.querySelector('.main-content').scrollHeight;
+        }, 50);
+    }
+
     // --- 1. LocalStorage Logic ---
     function getChats() {
         try {
@@ -117,20 +157,12 @@ document.addEventListener('DOMContentLoaded', () => {
         statusPanel.classList.add('hidden');
         resultsPanel.classList.remove('hidden');
 
-        if (lastAssistantMsg) {
-            let textToRender = lastAssistantMsg.content;
-            let isRejection = textToRender.includes("This is a Trip Planner AI");
+        if (conversationHistory.length > 0) {
+            let lastMsg = conversationHistory[conversationHistory.length - 1];
+            let isRejection = lastMsg.role === 'assistant' && lastMsg.content.includes("This is a Trip Planner AI");
             toggleResultElements(isRejection);
-
-            // Strip internal thought for rendering
-            const thoughtEndToken = "</internal_thought>";
-            if (textToRender.includes(thoughtEndToken)) {
-                textToRender = textToRender.split(thoughtEndToken)[1].trimStart();
-            }
-            textToRender = textToRender.replace(/```markdown|```/g, '');
-
-            window.lastGeneratedItinerary = textToRender;
-            document.getElementById('itinerary-content').innerHTML = marked.parse(textToRender);
+            
+            renderChatFeed();
         } else {
             document.getElementById('itinerary-content').innerHTML = "<p>No itinerary generated yet.</p>";
         }
@@ -180,6 +212,8 @@ User Request: ${userInput}
 CRITICAL INSTRUCTION: You are strictly a trip planner and travel architect. If the user asks for ANYTHING unrelated to travel, vacations, itineraries, or trips (e.g., coding, recipes, math, general knowledge), you MUST immediately reply EXACTLY with:
 "This is a Trip Planner AI. I can only assist you with travel itineraries, trip planning, and vacation advice. Please ask me about a trip!"
 DO NOT use an <internal_thought> block if you are rejecting the prompt.
+
+CRITICAL INSTRUCTION 2: You are running in a strict token-limited environment. Keep your <internal_thought> EXTREMELY concise (under 50 words). Make your final output structured and impactful, but never bloated, to completely avoid mid-sentence cutoff!
 
 IF the request IS about travel:
 You MUST use an <internal_thought> block to think through the entire itinerary before you output the final markdown. Let's think step by step.
@@ -231,7 +265,7 @@ Begin!`;
 
         conversationHistory.push({
             role: "user",
-            content: followUpText + "\n\nPlease use <internal_thought> again to reason about how to apply these changes, then provide the FULL updated itinerary."
+            content: followUpText + "\n\nCRITICAL INSTRUCTION: If the user is asking a specific question (e.g. 'what about flights?', 'cheaper hotels?', 'give me just day 1'), answer ONLY their specific question clearly. DO NOT regenerate the full itinerary unless specifically asked to. Use <internal_thought> first."
         });
 
         await runAgenticWorkflow();
@@ -314,6 +348,13 @@ Begin!`;
         toggleResultElements(false);
 
         try {
+            renderChatFeed();
+            
+            let assistantDiv = document.createElement('div');
+            assistantDiv.className = 'chat-message assistant-message markdown-body';
+            assistantDiv.style.display = 'none';
+            document.getElementById('itinerary-content').appendChild(assistantDiv);
+
             let accumulatedText = "";
             let insideThought = false;
             let finalOutputAccumulator = "";
@@ -330,11 +371,15 @@ Begin!`;
                     statusPanel.classList.add('hidden');
                     resultsPanel.classList.remove('hidden');
                     toggleResultElements(true);
-                    document.getElementById('itinerary-content').innerHTML = marked.parse(accumulatedText);
+                    
+                    assistantDiv.style.display = 'block';
+                    assistantDiv.innerHTML = marked.parse(accumulatedText);
                     finalOutputAccumulator = accumulatedText;
                 } else if (accumulatedText.includes(thoughtStartToken) && !accumulatedText.includes(thoughtEndToken)) {
                     if (!insideThought) {
                         insideThought = true;
+                        // Scroll to bottom so loader is visible
+                        document.querySelector('.main-content').scrollTop = document.querySelector('.main-content').scrollHeight;
                     }
                 } else if (accumulatedText.includes(thoughtEndToken)) {
                     if (insideThought) {
@@ -342,14 +387,17 @@ Begin!`;
                         
                         statusPanel.classList.add('hidden');
                         resultsPanel.classList.remove('hidden');
-                        document.getElementById('itinerary-content').innerHTML = "<p><em>Finalizing your itinerary...</em></p>";
+                        assistantDiv.style.display = 'block';
                     }
                     
                     const finalParts = accumulatedText.split(thoughtEndToken);
                     if (finalParts.length > 1) {
                         finalOutputAccumulator = finalParts[1].trimStart();
                         let cleanFinal = finalOutputAccumulator.replace(/```markdown|```/g, '');
-                        document.getElementById('itinerary-content').innerHTML = marked.parse(cleanFinal);
+                        assistantDiv.innerHTML = marked.parse(cleanFinal);
+                        
+                        // Auto scroll down stream
+                        document.querySelector('.main-content').scrollTop = document.querySelector('.main-content').scrollHeight;
                     }
                 }
             });
@@ -360,7 +408,9 @@ Begin!`;
                 toggleResultElements(isRejection);
                 statusPanel.classList.add('hidden');
                 resultsPanel.classList.remove('hidden');
-                document.getElementById('itinerary-content').innerHTML = marked.parse(accumulatedText);
+                
+                assistantDiv.style.display = 'block';
+                assistantDiv.innerHTML = marked.parse(accumulatedText);
                 finalOutputAccumulator = accumulatedText;
             }
 

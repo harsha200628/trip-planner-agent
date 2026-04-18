@@ -49,14 +49,15 @@
             </div>
 
             <div id="results-container" class="glass-panel hidden">
-                <h2>Generated Itinerary</h2>
-                <div id="itinerary-content" class="markdown-body"></div>
+                <h2 id="results-header">Trip Plan Chat</h2>
+                <div id="itinerary-content" class="chat-feed"></div>
                 
                 <div class="follow-up-section" id="follow-up-section">
-                    <label for="follow-up-prompt">Want to make changes?</label>
                     <div class="follow-up-input-group">
-                        <textarea id="follow-up-prompt" placeholder="e.g. 'Add a day focusing on museums' or 'Make the budget cheaper'"></textarea>
-                        <button id="follow-up-btn" class="primary-btn">Update</button>
+                        <textarea id="follow-up-prompt" placeholder="Message the planner..."></textarea>
+                        <button id="follow-up-btn" class="send-btn" title="Send message">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"></path></svg>
+                        </button>
                     </div>
                 </div>
 

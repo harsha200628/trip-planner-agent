@@ -326,25 +326,59 @@ select option {
 
 .follow-up-input-group {
     display: flex;
-    gap: 1rem;
-    align-items: flex-start;
+    align-items: flex-end;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 0.5rem;
+    transition: border-color 0.2s;
+}
+
+.follow-up-input-group:focus-within {
+    border-color: var(--primary-color);
 }
 
 .follow-up-input-group textarea {
     flex: 1;
-    min-height: 52px; 
-    height: 52px;
-    resize: vertical;
+    min-height: 24px;
+    max-height: 120px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    resize: none;
+    padding: 8px 12px;
+    box-shadow: none;
+    color: var(--text-primary);
 }
 
-.follow-up-input-group .primary-btn {
-    width: auto;
-    margin-top: 0;
-    padding: 0 1.5rem;
-    height: 52px;
+.follow-up-input-group textarea:focus {
+    outline: none;
+    box-shadow: none;
+    border-color: transparent;
+}
+
+.send-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.send-btn:hover {
+    background-color: var(--primary-hover);
+}
+
+.send-btn:active {
+    transform: scale(0.95);
 }
 
 /* Sidebar Layout */
@@ -452,4 +486,36 @@ select option {
 
 .sidebar-clear-btn:hover {
     background-color: rgba(248, 81, 73, 0.1);
+}
+
+/* Chat Feed Layout */
+.chat-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.chat-message {
+    padding: 1.25rem 1.5rem;
+    border-radius: var(--radius-md);
+    max-width: 85%;
+    word-wrap: break-word;
+}
+
+.user-message {
+    align-self: flex-end;
+    background-color: var(--primary-color);
+    color: white;
+    border-bottom-right-radius: 4px;
+    font-weight: 500;
+}
+
+.assistant-message {
+    align-self: flex-start;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-bottom-left-radius: 4px;
+    width: 100%;
+    max-width: 100%;
 }
