@@ -16,6 +16,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusMessage = document.getElementById('status-message');
     const chatListEl = document.getElementById('chat-history-list');
 
+    function toggleResultElements(isRejected) {
+        const header = resultsPanel.querySelector('h2');
+        const followUp = document.getElementById('follow-up-section');
+        const downloadBtn = document.getElementById('download-btn');
+        if (isRejected) {
+            if (header) header.classList.add('hidden');
+            if (followUp) followUp.classList.add('hidden');
+            if (downloadBtn) downloadBtn.classList.add('hidden');
+        } else {
+            if (header) header.classList.remove('hidden');
+            if (followUp) followUp.classList.remove('hidden');
+            if (downloadBtn) downloadBtn.classList.remove('hidden');
+        }
+    }
+
     // --- 1. LocalStorage Logic ---
     function getChats() {
         try {
@@ -52,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let chats = getChats();
         // Sort newest first
         chats.sort((a, b) => b.createdAt - a.createdAt);
-        
+
         chatListEl.innerHTML = '';
         if (chats.length === 0) {
             chatListEl.innerHTML = '<p class="sidebar-empty">No past trips yet.</p>';
@@ -63,11 +78,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const div = document.createElement('div');
             div.className = 'chat-item';
             if (chat._id === currentChatId) div.classList.add('active');
-            
+
             const titleSpan = document.createElement('span');
             titleSpan.className = 'chat-title';
             titleSpan.textContent = chat.title || 'Trip Plan';
-            
+
             const deleteBtn = document.createElement('button');
             deleteBtn.innerHTML = '&times;';
             deleteBtn.className = 'chat-item-delete';
@@ -78,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     deleteChat(chat._id);
                 }
             };
-            
+
             div.appendChild(titleSpan);
             div.appendChild(deleteBtn);
             div.onclick = () => loadSingleChat(chat._id);
@@ -90,27 +105,30 @@ document.addEventListener('DOMContentLoaded', () => {
         let chats = getChats();
         const chat = chats.find(c => c._id === id);
         if (!chat) return;
-        
+
         currentChatId = chat._id;
         conversationHistory = chat.messages || [];
         loadSidebar();
 
         // Find the last assistant message to display
         const lastAssistantMsg = conversationHistory.slice().reverse().find(m => m.role === 'assistant');
-        
+
         form.classList.add('hidden');
         statusPanel.classList.add('hidden');
         resultsPanel.classList.remove('hidden');
 
         if (lastAssistantMsg) {
+            let textToRender = lastAssistantMsg.content;
+            let isRejection = textToRender.includes("This is a Trip Planner AI");
+            toggleResultElements(isRejection);
+
             // Strip internal thought for rendering
             const thoughtEndToken = "</internal_thought>";
-            let textToRender = lastAssistantMsg.content;
             if (textToRender.includes(thoughtEndToken)) {
                 textToRender = textToRender.split(thoughtEndToken)[1].trimStart();
             }
             textToRender = textToRender.replace(/```markdown|```/g, '');
-            
+
             window.lastGeneratedItinerary = textToRender;
             document.getElementById('itinerary-content').innerHTML = marked.parse(textToRender);
         } else {
@@ -122,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let chats = getChats();
         chats = chats.filter(c => c._id !== id);
         saveChats(chats);
-        
+
         if (currentChatId === id) {
             document.getElementById('new-chat-btn').click();
         } else {
@@ -133,12 +151,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('new-chat-btn').addEventListener('click', () => {
         currentChatId = null;
         conversationHistory = [];
-        
+
         resultsPanel.classList.add('hidden');
         statusPanel.classList.add('hidden');
         form.classList.remove('hidden');
         document.getElementById('user-prompt').value = '';
-        
+
         loadSidebar(); // Update active class naturally
     });
 
@@ -159,6 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const prompt = `You are an expert AI Travel Architect.
 User Request: ${userInput}
 
+CRITICAL INSTRUCTION: You are strictly a trip planner and travel architect. If the user asks for ANYTHING unrelated to travel, vacations, itineraries, or trips (e.g., coding, recipes, math, general knowledge), you MUST immediately reply EXACTLY with:
+"This is a Trip Planner AI. I can only assist you with travel itineraries, trip planning, and vacation advice. Please ask me about a trip!"
+DO NOT use an <internal_thought> block if you are rejecting the prompt.
+
+IF the request IS about travel:
 You MUST use an <internal_thought> block to think through the entire itinerary before you output the final markdown. Let's think step by step.
 Format your output EXACTLY as follows:
 
@@ -166,7 +189,6 @@ Format your output EXACTLY as follows:
 - Constraints Analysis
 - Realistic travel times and distances
 - Budget Strategy (verify viability)
-- Critic Review: Are these activities viable and logical? Adjust if needed.
 - Rough Daily Schedule
 </internal_thought>
 
@@ -177,7 +199,7 @@ The final output MUST be beautifully formatted Markdown tailored to the user's r
 ## 💰 Estimated Costs
 ## 💡 Travel Tips
 
-Begin! First open <internal_thought>.`;
+Begin!`;
 
         conversationHistory = [
             { role: "user", content: prompt }
@@ -186,7 +208,7 @@ Begin! First open <internal_thought>.`;
         // Give it a generic title based on string slice and save empty chat
         const shortTitle = userInput.substring(0, 30) + (userInput.length > 30 ? "..." : "");
         currentChatId = Date.now().toString(); // unique ID
-        
+
         let chats = getChats();
         chats.push({
             _id: currentChatId,
@@ -206,7 +228,7 @@ Begin! First open <internal_thought>.`;
         if (!followUpText) return;
 
         followUpInput.value = ""; // Clear input UI
-        
+
         conversationHistory.push({
             role: "user",
             content: followUpText + "\n\nPlease use <internal_thought> again to reason about how to apply these changes, then provide the FULL updated itinerary."
@@ -247,7 +269,7 @@ Begin! First open <internal_thought>.`;
                 if (errorJson.error) {
                     errorDetail = errorJson.error;
                 }
-            } catch (e) {}
+            } catch (e) { }
             throw new Error(`\n${errorDetail}`);
         }
 
@@ -289,71 +311,38 @@ Begin! First open <internal_thought>.`;
         form.classList.add('hidden');
         resultsPanel.classList.add('hidden');
         statusPanel.classList.remove('hidden');
-
-        [1, 2].forEach(n => {
-            const step = document.getElementById(`step-${n}`);
-            if (step) step.className = 'pending';
-        });
-
-        const consoleEl = document.getElementById('console-output');
-        consoleEl.innerHTML = '';
-
-        function appendToConsole(actorClass, text, isNew = false) {
-            if (isNew) {
-                const span = document.createElement('span');
-                span.className = actorClass;
-                span.innerText = text;
-                consoleEl.appendChild(span);
-                return span;
-            } else {
-                const spans = consoleEl.getElementsByClassName(actorClass);
-                if (spans.length > 0) {
-                    spans[spans.length - 1].innerText += text;
-                }
-            }
-            consoleEl.scrollTop = consoleEl.scrollHeight;
-        }
-
-        function logSystem(msg) {
-            const div = document.createElement('div');
-            div.className = 'console-message console-system';
-            div.innerText = `> ${msg}`;
-            consoleEl.appendChild(div);
-            consoleEl.scrollTop = consoleEl.scrollHeight;
-        }
+        toggleResultElements(false);
 
         try {
-            logSystem(`Initializing Orchestration...`);
-            updateAgentStep(1, 'active', 'Architect: Executing Chain-of-Thought...');
-            logSystem('Launching Agent [Generating Plan]...');
-
             let accumulatedText = "";
             let insideThought = false;
             let finalOutputAccumulator = "";
             let thoughtStartToken = "<internal_thought>";
             let thoughtEndToken = "</internal_thought>";
+            let rejectedPrompt = false;
 
-            appendToConsole('console-planner', '\\n[Agent Initialization]\\n', true);
-            
             await streamGenerateAPI(conversationHistory, (chunk, fullText) => {
                 accumulatedText += chunk;
-                
-                if (accumulatedText.includes(thoughtStartToken) && !accumulatedText.includes(thoughtEndToken)) {
+
+                if (accumulatedText.includes("This is a Trip Planner AI") || rejectedPrompt) {
+                    // Safe trip rejection path - no thought block needed
+                    rejectedPrompt = true;
+                    statusPanel.classList.add('hidden');
+                    resultsPanel.classList.remove('hidden');
+                    toggleResultElements(true);
+                    document.getElementById('itinerary-content').innerHTML = marked.parse(accumulatedText);
+                    finalOutputAccumulator = accumulatedText;
+                } else if (accumulatedText.includes(thoughtStartToken) && !accumulatedText.includes(thoughtEndToken)) {
                     if (!insideThought) {
                         insideThought = true;
-                        updateAgentStep(1, 'active', 'Architect: Generating Chain-of-Thought...');
                     }
-                    appendToConsole('console-planner', chunk);
                 } else if (accumulatedText.includes(thoughtEndToken)) {
                     if (insideThought) {
                         insideThought = false;
-                        updateAgentStep(1, 'completed', 'Architect: Chain-of-Thought completed.');
-                        updateAgentStep(2, 'active', 'Synthesizer: Drafting Final Output...');
-                        logSystem('Thinking complete. Switching to Synthesizer...');
                         
                         statusPanel.classList.add('hidden');
                         resultsPanel.classList.remove('hidden');
-                        document.getElementById('itinerary-content').innerHTML = "<p><em>Synthesizer is compiling your meticulously planned itinerary...</em></p>";
+                        document.getElementById('itinerary-content').innerHTML = "<p><em>Finalizing your itinerary...</em></p>";
                     }
                     
                     const finalParts = accumulatedText.split(thoughtEndToken);
@@ -362,10 +351,18 @@ Begin! First open <internal_thought>.`;
                         let cleanFinal = finalOutputAccumulator.replace(/```markdown|```/g, '');
                         document.getElementById('itinerary-content').innerHTML = marked.parse(cleanFinal);
                     }
-                } else {
-                    appendToConsole('console-system', chunk);
                 }
             });
+
+            // Handle the boundary case where it rejected immediately but text matching delayed
+            if (!rejectedPrompt && !accumulatedText.includes(thoughtEndToken)) {
+                let isRejection = accumulatedText.includes("This is a Trip Planner AI");
+                toggleResultElements(isRejection);
+                statusPanel.classList.add('hidden');
+                resultsPanel.classList.remove('hidden');
+                document.getElementById('itinerary-content').innerHTML = marked.parse(accumulatedText);
+                finalOutputAccumulator = accumulatedText;
+            }
 
             // Once finished, record assistant's total response.
             conversationHistory.push({
@@ -376,14 +373,12 @@ Begin! First open <internal_thought>.`;
             // Save to localStorage
             saveCurrentChat();
 
-            updateAgentStep(2, 'completed', 'Synthesizer: Itinerary finalized.');
             window.lastGeneratedItinerary = finalOutputAccumulator;
 
         } catch (error) {
             console.error(error);
-            logSystem(`CRITICAL ORCHESTRATION ERROR: ${error.message}`);
-            statusMessage.textContent = "An error occurred. Check the Agent Console.";
-            statusMessage.style.color = "#f85149";
+            document.getElementById('status-message').textContent = "An error occurred.";
+            document.getElementById('status-message').style.color = "#f85149";
         }
     }
 
