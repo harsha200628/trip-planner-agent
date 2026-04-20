@@ -1,84 +1,91 @@
-// Hugging Face API Configuration
-const HF_KEY = "xxxxx";
+// ============================================================
+// AI Trip Planner — app.js (Clean Master Version)
+// ============================================================
+
+const HF_KEY = "xxxxxxx";
 const MODEL = "google/gemma-3-27b-it";
 const HF_URL = "https://router.huggingface.co/v1/chat/completions";
 
-// Global State
 let conversationHistory = [];
 let currentChatId = null;
+let currentController = null;
 
-// Wait for DOM
 document.addEventListener('DOMContentLoaded', () => {
 
+    // ── DOM refs ────────────────────────────────────────────
     const form = document.getElementById('trip-form');
-    const statusPanel = document.getElementById('agent-status');
+    const inputContainer = document.getElementById('trip-input-container');
     const resultsPanel = document.getElementById('results-container');
-    const statusMessage = document.getElementById('status-message');
+    const inlineLoader = document.getElementById('inline-loader');
     const chatListEl = document.getElementById('chat-history-list');
+    const mainContent = document.querySelector('.main-content');
 
-    function toggleResultElements(isRejected) {
-        const header = resultsPanel.querySelector('h2');
-        const followUp = document.getElementById('follow-up-section');
-        const downloadBtn = document.getElementById('download-btn');
-        if (isRejected) {
-            if (header) header.classList.add('hidden');
-            if (followUp) followUp.classList.add('hidden');
-            if (downloadBtn) downloadBtn.classList.add('hidden');
-        } else {
-            if (header) header.classList.remove('hidden');
-            if (followUp) followUp.classList.remove('hidden');
-            if (downloadBtn) downloadBtn.classList.remove('hidden');
-        }
+    const sidebar = document.getElementById('sidebar');
+    const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    const cancelBtn = document.getElementById('cancel-stream-btn');
+    const promptInput = document.getElementById('user-prompt');
+    const followUpInput = document.getElementById('follow-up-prompt');
+    const followUpBtn = document.getElementById('follow-up-btn');
+    const submitBtn = document.getElementById('submit-btn');
+
+    // ── Helpers ──────────────────────────────────────────────
+
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        sidebarBackdrop.classList.remove('show');
     }
 
+    function scrollToBottom() {
+        setTimeout(() => { mainContent.scrollTop = mainContent.scrollHeight; }, 80);
+    }
+
+    /** Strip system-prompt noise before showing in chat bubble */
     function extractUserQuery(rawContent, msgIndex) {
-        if (msgIndex === 0 && rawContent.includes("User Request:")) {
-            const lines = rawContent.split('\n');
-            const userReqLine = lines.find(l => l.startsWith("User Request:"));
-            if (userReqLine) return userReqLine.replace("User Request:", "").trim();
+        if (msgIndex === 0 && rawContent.includes('User Request:')) {
+            return rawContent.split('User Request:')[1]
+                .split(/\n\nCRITICAL INSTRUCTIONS?:/)[0].trim();
         }
-        if (rawContent.includes("CRITICAL INSTRUCTION:")) {
-             return rawContent.split("\n\nCRITICAL INSTRUCTION:")[0].trim();
+        if (rawContent.includes('\n\nCRITICAL INSTRUCTION:')) {
+            return rawContent.split('\n\nCRITICAL INSTRUCTION:')[0].trim();
         }
         return rawContent.trim();
     }
 
+    /** Render full conversation history as chat bubbles */
     function renderChatFeed() {
         const container = document.getElementById('itinerary-content');
         container.innerHTML = '';
-        
-        conversationHistory.forEach((msg, index) => {
+
+        conversationHistory.forEach((msg, idx) => {
             const div = document.createElement('div');
+
             if (msg.role === 'user') {
                 div.className = 'chat-message user-message';
-                div.textContent = extractUserQuery(msg.content, index);
+                div.textContent = extractUserQuery(msg.content, idx);
+
             } else if (msg.role === 'assistant') {
                 div.className = 'chat-message assistant-message markdown-body';
-                const thoughtEndToken = "</internal_thought>";
-                let textToRender = msg.content;
-                if (textToRender.includes(thoughtEndToken)) {
-                    textToRender = textToRender.split(thoughtEndToken)[1].trimStart();
+                let text = msg.content;
+                // Strip internal thought block
+                const endToken = '</internal_thought>';
+                if (text.includes(endToken)) {
+                    text = text.split(endToken)[1].trimStart();
                 }
-                textToRender = textToRender.replace(/```markdown|```/g, '');
-                div.innerHTML = marked.parse(textToRender);
+                text = text.replace(/```markdown\n?|```/g, '');
+                div.innerHTML = marked.parse(text);
             }
             container.appendChild(div);
         });
-        
-        // Auto scroll to bottom
-        setTimeout(() => {
-            document.querySelector('.main-content').scrollTop = document.querySelector('.main-content').scrollHeight;
-        }, 50);
+
+        scrollToBottom();
     }
 
-    // --- 1. LocalStorage Logic ---
+    // ── LocalStorage ─────────────────────────────────────────
+
     function getChats() {
-        try {
-            const data = localStorage.getItem('tripChats');
-            return data ? JSON.parse(data) : [];
-        } catch (e) {
-            return [];
-        }
+        try { return JSON.parse(localStorage.getItem('tripChats') || '[]'); }
+        catch { return []; }
     }
 
     function saveChats(chats) {
@@ -87,230 +94,252 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveCurrentChat() {
         if (!currentChatId) return;
-        let chats = getChats();
-        const index = chats.findIndex(c => c._id === currentChatId);
-        if (index > -1) {
-            chats[index].messages = conversationHistory;
+        localStorage.setItem('lastActiveChatId', currentChatId);
+        const chats = getChats();
+        const idx = chats.findIndex(c => c._id === currentChatId);
+
+        if (idx > -1) {
+            chats[idx].messages = conversationHistory;
         } else {
+            const title = extractUserQuery(conversationHistory[0].content, 0);
             chats.push({
                 _id: currentChatId,
-                title: "New Trip Plan",
+                title: title.substring(0, 32) + (title.length > 32 ? '…' : ''),
                 messages: conversationHistory,
                 createdAt: Date.now()
             });
         }
         saveChats(chats);
-        loadSidebar();
+        renderSidebar();
     }
 
-    function loadSidebar() {
-        let chats = getChats();
-        // Sort newest first
-        chats.sort((a, b) => b.createdAt - a.createdAt);
+    // ── Sidebar ───────────────────────────────────────────────
 
+    function renderSidebar() {
+        const chats = getChats().sort((a, b) => b.createdAt - a.createdAt);
         chatListEl.innerHTML = '';
+
         if (chats.length === 0) {
             chatListEl.innerHTML = '<p class="sidebar-empty">No past trips yet.</p>';
             return;
         }
 
         chats.forEach(chat => {
-            const div = document.createElement('div');
-            div.className = 'chat-item';
-            if (chat._id === currentChatId) div.classList.add('active');
+            const item = document.createElement('div');
+            item.className = 'chat-item' + (chat._id === currentChatId ? ' active' : '');
 
             const titleSpan = document.createElement('span');
             titleSpan.className = 'chat-title';
             titleSpan.textContent = chat.title || 'Trip Plan';
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.innerHTML = '&times;';
-            deleteBtn.className = 'chat-item-delete';
-            deleteBtn.title = "Delete trip";
-            deleteBtn.onclick = (e) => {
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '&times;';
+            delBtn.className = 'chat-item-delete';
+            delBtn.onclick = e => {
                 e.stopPropagation();
-                if (confirm("Delete this trip?")) {
-                    deleteChat(chat._id);
-                }
+                if (confirm('Delete this trip?')) deleteChat(chat._id);
             };
 
-            div.appendChild(titleSpan);
-            div.appendChild(deleteBtn);
-            div.onclick = () => loadSingleChat(chat._id);
-            chatListEl.appendChild(div);
+            item.appendChild(titleSpan);
+            item.appendChild(delBtn);
+            item.onclick = () => loadSingleChat(chat._id);
+            chatListEl.appendChild(item);
         });
     }
 
     function loadSingleChat(id) {
-        let chats = getChats();
-        const chat = chats.find(c => c._id === id);
-        if (!chat) return;
-
-        currentChatId = chat._id;
-        conversationHistory = chat.messages || [];
-        loadSidebar();
-
-        // Find the last assistant message to display
-        const lastAssistantMsg = conversationHistory.slice().reverse().find(m => m.role === 'assistant');
-
-        form.classList.add('hidden');
-        statusPanel.classList.add('hidden');
-        resultsPanel.classList.remove('hidden');
-
-        if (conversationHistory.length > 0) {
-            let lastMsg = conversationHistory[conversationHistory.length - 1];
-            let isRejection = lastMsg.role === 'assistant' && lastMsg.content.includes("This is a Trip Planner AI");
-            toggleResultElements(isRejection);
-            
-            renderChatFeed();
-        } else {
-            document.getElementById('itinerary-content').innerHTML = "<p>No itinerary generated yet.</p>";
+        const chat = getChats().find(c => c._id === id);
+        if (!chat) {
+            localStorage.removeItem('lastActiveChatId');
+            return;
         }
+        currentChatId = chat._id;
+        localStorage.setItem('lastActiveChatId', currentChatId);
+        conversationHistory = chat.messages || [];
+        renderSidebar();
+        inputContainer.classList.add('hidden');
+        resultsPanel.classList.remove('hidden');
+        renderChatFeed();
     }
 
     function deleteChat(id) {
-        let chats = getChats();
-        chats = chats.filter(c => c._id !== id);
+        const chats = getChats().filter(c => c._id !== id);
         saveChats(chats);
-
         if (currentChatId === id) {
-            document.getElementById('new-chat-btn').click();
+            newChat();
         } else {
-            loadSidebar();
+            renderSidebar();
         }
     }
+
+    function newChat() {
+        currentChatId = null;
+        localStorage.removeItem('lastActiveChatId');
+        conversationHistory = [];
+        resultsPanel.classList.add('hidden');
+        inputContainer.classList.remove('hidden');
+        document.getElementById('user-prompt').value = '';
+        renderSidebar();
+    }
+
+    // ── Button Listeners ──────────────────────────────────────
 
     document.getElementById('new-chat-btn').addEventListener('click', () => {
-        currentChatId = null;
-        conversationHistory = [];
-
-        resultsPanel.classList.add('hidden');
-        statusPanel.classList.add('hidden');
-        form.classList.remove('hidden');
-        document.getElementById('user-prompt').value = '';
-
-        loadSidebar(); // Update active class naturally
+        newChat();
+        closeSidebar();
     });
+
+    hamburgerBtn?.addEventListener('click', () => {
+        sidebar.classList.add('open');
+        sidebarBackdrop.classList.add('show');
+    });
+    sidebarBackdrop?.addEventListener('click', closeSidebar);
 
     document.getElementById('clear-history-btn').addEventListener('click', () => {
-        if (confirm("Are you sure you want to completely delete all saved trips? This cannot be undone.")) {
+        if (confirm('Clear all trip history?')) {
             localStorage.removeItem('tripChats');
-            document.getElementById('new-chat-btn').click();
+            newChat();
         }
     });
 
-    // Initial Load
-    loadSidebar();
+    document.getElementById('download-btn').addEventListener('click', () => {
+        let contentToPrint = window.lastGeneratedItinerary;
 
-    // --- 2. Form Submission ---
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const userInput = document.getElementById('user-prompt').value;
-        const prompt = `You are an expert AI Travel Architect.
-User Request: ${userInput}
-
-CRITICAL INSTRUCTION: You are strictly a trip planner and travel architect. If the user asks for ANYTHING unrelated to travel, vacations, itineraries, or trips (e.g., coding, recipes, math, general knowledge), you MUST immediately reply EXACTLY with:
-"This is a Trip Planner AI. I can only assist you with travel itineraries, trip planning, and vacation advice. Please ask me about a trip!"
-DO NOT use an <internal_thought> block if you are rejecting the prompt.
-
-CRITICAL INSTRUCTION 2: You are running in a strict token-limited environment. Keep your <internal_thought> EXTREMELY concise (under 50 words). Make your final output structured and impactful, but never bloated, to completely avoid mid-sentence cutoff!
-
-IF the request IS about travel:
-You MUST use an <internal_thought> block to think through the entire itinerary before you output the final markdown. Let's think step by step.
-Format your output EXACTLY as follows:
-
-<internal_thought>
-- Constraints Analysis
-- Realistic travel times and distances
-- Budget Strategy (verify viability)
-- Rough Daily Schedule
-</internal_thought>
-
-[FINAL OUTPUT HERE]
-The final output MUST be beautifully formatted Markdown tailored to the user's request, including:
-## 📋 Trip Summary
-## 🗺️ Day-by-Day Itinerary (Highly detailed with time estimates and travel methods)
-## 💰 Estimated Costs
-## 💡 Travel Tips
-
-Begin!`;
-
-        conversationHistory = [
-            { role: "user", content: prompt }
-        ];
-
-        // Give it a generic title based on string slice and save empty chat
-        const shortTitle = userInput.substring(0, 30) + (userInput.length > 30 ? "..." : "");
-        currentChatId = Date.now().toString(); // unique ID
-
-        let chats = getChats();
-        chats.push({
-            _id: currentChatId,
-            title: shortTitle,
-            messages: conversationHistory,
-            createdAt: Date.now()
-        });
-        saveChats(chats);
-        loadSidebar();
-
-        await runAgenticWorkflow();
-    });
-
-    document.getElementById('follow-up-btn').addEventListener('click', async () => {
-        const followUpInput = document.getElementById('follow-up-prompt');
-        const followUpText = followUpInput.value.trim();
-        if (!followUpText) return;
-
-        followUpInput.value = ""; // Clear input UI
-
-        conversationHistory.push({
-            role: "user",
-            content: followUpText + "\n\nCRITICAL INSTRUCTION: If the user is asking a specific question (e.g. 'what about flights?', 'cheaper hotels?', 'give me just day 1'), answer ONLY their specific question clearly. DO NOT regenerate the full itinerary unless specifically asked to. Use <internal_thought> first."
-        });
-
-        await runAgenticWorkflow();
-    });
-
-    function updateAgentStep(stepNum, status, textMessage) {
-        statusMessage.textContent = textMessage;
-        const stepEl = document.getElementById(`step-${stepNum}`);
-        if (stepEl) {
-            stepEl.className = status;
+        // If undefined (e.g. page reloaded and chat fetched from memory), grab from history
+        if (!contentToPrint) {
+            const lastMsg = conversationHistory.slice().reverse().find(m => m.role === 'assistant');
+            if (lastMsg) {
+                let text = lastMsg.content;
+                if (text.includes('</internal_thought>')) {
+                    text = text.split('</internal_thought>')[1].trimStart();
+                }
+                contentToPrint = text.replace(/```markdown\n?|```/g, '');
+            } else {
+                alert('No itinerary to save!');
+                return;
+            }
         }
+
+        let printDiv = document.getElementById('print-section');
+        if (!printDiv) {
+            printDiv = document.createElement('div');
+            printDiv.id = 'print-section';
+            document.body.appendChild(printDiv);
+
+            const printStyle = document.createElement('style');
+            printStyle.innerHTML = `
+                @media print {
+                    body * { visibility: hidden; }
+                    #print-section, #print-section * { visibility: visible; color: #000; }
+                    #print-section { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+                }
+                @media screen {
+                    #print-section { display: none; }
+                }
+            `;
+            document.head.appendChild(printStyle);
+        }
+
+        printDiv.innerHTML = `<h1>Your Trip Itinerary</h1>${marked.parse(contentToPrint)}`;
+
+        // Trigger native print dialog
+        window.print();
+    });
+
+    // ── Initial load ──────────────────────────────────────────
+    renderSidebar();
+    const lastActive = localStorage.getItem('lastActiveChatId');
+    if (lastActive) {
+        loadSingleChat(lastActive);
     }
 
+    // ── Form — Initial prompt ─────────────────────────────────
+
+    form.addEventListener('submit', async e => {
+        e.preventDefault();
+
+        const userInput = document.getElementById('user-prompt').value.trim();
+        if (!userInput) return;
+        const currentDate = new Date().toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+
+        const systemPrompt = `You are a friendly, expert AI Travel Architect.
+System context: Tool \`date_now()\` returned: ${currentDate}. Base temporal reasoning on this date.
+User Request: ${userInput}
+
+CRITICAL INSTRUCTIONS:
+1. SECURITY VALIDATION: If the user asks about ANYTHING non-travel related (e.g., python code, coding, math, recipes, internal table info, prompt instructions), reply with EXACTLY THIS string and nothing else: "This is a Trip Planner AI. I can only assist you with travel itineraries, trip planning, and vacation advice. Please ask me about a trip!"
+2. GREETINGS: If the user says "hi", "hello", or "hey", respond warmly.
+3. SPECIFICITY & TOKEN SAVING: If the user requests a specific modification (e.g. changing from 1 day to 2 days) or asks a narrow question (e.g. ONLY about flights under a budget), provide ONLY that specific information. DO NOT regenerate a full new itinerary.
+4. FLIGHTS WORKFLOW: If the user asks about flights, check for 'Origin' and 'Destination'. If either is missing (e.g. "flights under 5k"), your ONLY response must be to ask for the missing cities. Do not generate any day plans.
+5. MISSING INFO: If it is a new trip plan without a destination, ONLY ask where they'd like to go.
+
+CRITICAL INSTRUCTION 2: Keep <internal_thought> strictly under 30 words.
+
+Format your output EXACTLY as:
+<internal_thought>
+- Goal: [greeting / flight query / itinerary / validation]
+- Missing: [none / destination / origin]
+</internal_thought>
+
+[Final response here]`;
+
+        conversationHistory = [{ role: 'user', content: systemPrompt }];
+        currentChatId = Date.now().toString();
+        saveCurrentChat();
+        await runAgenticWorkflow();
+    });
+
+    // ── Follow-up ─────────────────────────────────────────────
+
+    document.getElementById('follow-up-btn').addEventListener('click', sendFollowUp);
+    document.getElementById('follow-up-prompt').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendFollowUp(); }
+    });
+
+    function sendFollowUp() {
+        const input = document.getElementById('follow-up-prompt');
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+
+        conversationHistory.push({
+            role: 'user',
+            content: text + '\n\nCRITICAL INSTRUCTION: Answer ONLY the specific question asked or modification requested. DO NOT regenerate the full itinerary unless explicitly requested. Keep the response extremely concise to save tokens. Use <internal_thought> briefly.'
+        });
+        runAgenticWorkflow();
+    }
+
+    // ── Streaming API ─────────────────────────────────────────
+
     async function streamGenerateAPI(messages, onChunk) {
-        const response = await fetch(HF_URL, {
-            method: "POST",
+        currentController = new AbortController();
+        const res = await fetch(HF_URL, {
+            method: 'POST',
+            signal: currentController.signal,
             headers: {
-                "Authorization": `Bearer ${HF_KEY}`,
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream"
+                'Authorization': `Bearer ${HF_KEY}`,
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream'
             },
             body: JSON.stringify({
                 model: MODEL,
                 messages: messages,
-                max_tokens: 8192,
+                max_tokens: 4096,
                 temperature: 0.7,
                 stream: true
             })
         });
 
-        if (!response.ok) {
-            let errorDetail = response.statusText;
-            try {
-                const errorJson = await response.clone().json();
-                if (errorJson.error) {
-                    errorDetail = errorJson.error;
-                }
-            } catch (e) { }
-            throw new Error(`\n${errorDetail}`);
+        if (!res.ok) {
+            const errBody = await res.text();
+            throw new Error(`API Error ${res.status}: ${errBody}`);
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let fullOutput = "";
-        let buffer = "";
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '', fullOutput = '';
 
         while (true) {
             const { done, value } = await reader.read();
@@ -318,179 +347,129 @@ Begin!`;
 
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
-            buffer = lines.pop();
+            buffer = lines.pop(); // keep incomplete line in buffer
 
             for (const line of lines) {
-                if (line.trim() === '') continue;
-                if (line.startsWith('data: ')) {
-                    const dataStr = line.substring(6);
-                    if (dataStr.trim() === '[DONE]') continue;
-                    try {
-                        const data = JSON.parse(dataStr);
-                        if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
-                            const chunk = data.choices[0].delta.content;
-                            fullOutput += chunk;
-                            onChunk(chunk, fullOutput);
-                        }
-                    } catch (e) {
-                        // ignore parse error
+                if (!line.startsWith('data: ')) continue;
+                const data = line.slice(6).trim();
+                if (data === '[DONE]') continue;
+                try {
+                    const json = JSON.parse(data);
+                    const chunk = json?.choices?.[0]?.delta?.content;
+                    if (chunk) {
+                        fullOutput += chunk;
+                        onChunk(chunk, fullOutput);
                     }
-                }
+                } catch { /* ignore malformed SSE lines */ }
             }
         }
         return fullOutput;
     }
 
+    // ── Agentic Workflow ──────────────────────────────────────
+
+    cancelBtn?.addEventListener('click', () => {
+        if (currentController) currentController.abort();
+    });
+
+    function setInputsDisabled(disabled) {
+        promptInput.disabled = disabled;
+        submitBtn.disabled = disabled;
+        followUpInput.disabled = disabled;
+        followUpBtn.disabled = disabled;
+        submitBtn.innerHTML = disabled ? 'Planning...' : 'Start Planning &rarr;';
+    }
+
     async function runAgenticWorkflow() {
-        form.classList.add('hidden');
-        resultsPanel.classList.add('hidden');
-        statusPanel.classList.remove('hidden');
-        toggleResultElements(false);
+        setInputsDisabled(true);
+        // Switch views
+        const isFollowUp = conversationHistory.length > 1;
+        if (!isFollowUp) {
+            inputContainer.classList.add('hidden');
+            resultsPanel.classList.remove('hidden');
+        }
+
+        renderChatFeed();
+        inlineLoader.classList.remove('hidden');
+        scrollToBottom();
+
+        // Create a live assistant bubble
+        const assistantDiv = document.createElement('div');
+        assistantDiv.className = 'chat-message assistant-message markdown-body';
+        assistantDiv.style.display = 'none';
+        document.getElementById('itinerary-content').appendChild(assistantDiv);
+
+        const START_TOKEN = '<internal_thought>';
+        const END_TOKEN = '</internal_thought>';
+
+        let accumulated = '';
+        let insideThought = false;
+        let finalOutput = '';
 
         try {
-            renderChatFeed();
-            
-            let assistantDiv = document.createElement('div');
-            assistantDiv.className = 'chat-message assistant-message markdown-body';
-            assistantDiv.style.display = 'none';
-            document.getElementById('itinerary-content').appendChild(assistantDiv);
+            await streamGenerateAPI(conversationHistory, (_chunk, fullText) => {
+                accumulated = fullText;
 
-            let accumulatedText = "";
-            let insideThought = false;
-            let finalOutputAccumulator = "";
-            let thoughtStartToken = "<internal_thought>";
-            let thoughtEndToken = "</internal_thought>";
-            let rejectedPrompt = false;
-
-            await streamGenerateAPI(conversationHistory, (chunk, fullText) => {
-                accumulatedText += chunk;
-
-                if (accumulatedText.includes("This is a Trip Planner AI") || rejectedPrompt) {
-                    // Safe trip rejection path - no thought block needed
-                    rejectedPrompt = true;
-                    statusPanel.classList.add('hidden');
-                    resultsPanel.classList.remove('hidden');
-                    toggleResultElements(true);
-                    
+                // ── Case 1: Off-topic rejection (no thought block used) ──
+                if (accumulated.includes('This is a Trip Planner AI')) {
+                    inlineLoader.classList.add('hidden');
                     assistantDiv.style.display = 'block';
-                    assistantDiv.innerHTML = marked.parse(accumulatedText);
-                    finalOutputAccumulator = accumulatedText;
-                } else if (accumulatedText.includes(thoughtStartToken) && !accumulatedText.includes(thoughtEndToken)) {
-                    if (!insideThought) {
-                        insideThought = true;
-                        // Scroll to bottom so loader is visible
-                        document.querySelector('.main-content').scrollTop = document.querySelector('.main-content').scrollHeight;
-                    }
-                } else if (accumulatedText.includes(thoughtEndToken)) {
+                    assistantDiv.innerHTML = marked.parse(accumulated);
+                    finalOutput = accumulated;
+                    return;
+                }
+
+                // ── Case 2: Thought block in progress ──
+                if (accumulated.includes(START_TOKEN) && !accumulated.includes(END_TOKEN)) {
+                    insideThought = true;
+                    return;
+                }
+
+                // ── Case 3: Thought block finished — stream final output ──
+                if (accumulated.includes(END_TOKEN)) {
                     if (insideThought) {
                         insideThought = false;
-                        
-                        statusPanel.classList.add('hidden');
-                        resultsPanel.classList.remove('hidden');
+                        inlineLoader.classList.add('hidden');
                         assistantDiv.style.display = 'block';
                     }
-                    
-                    const finalParts = accumulatedText.split(thoughtEndToken);
-                    if (finalParts.length > 1) {
-                        finalOutputAccumulator = finalParts[1].trimStart();
-                        let cleanFinal = finalOutputAccumulator.replace(/```markdown|```/g, '');
-                        assistantDiv.innerHTML = marked.parse(cleanFinal);
-                        
-                        // Auto scroll down stream
-                        document.querySelector('.main-content').scrollTop = document.querySelector('.main-content').scrollHeight;
+                    const parts = accumulated.split(END_TOKEN);
+                    if (parts.length > 1) {
+                        finalOutput = parts[1].trimStart().replace(/```markdown\n?|```/g, '');
+                        assistantDiv.innerHTML = marked.parse(finalOutput);
+                        scrollToBottom();
                     }
                 }
             });
 
-            // Handle the boundary case where it rejected immediately but text matching delayed
-            if (!rejectedPrompt && !accumulatedText.includes(thoughtEndToken)) {
-                let isRejection = accumulatedText.includes("This is a Trip Planner AI");
-                toggleResultElements(isRejection);
-                statusPanel.classList.add('hidden');
-                resultsPanel.classList.remove('hidden');
-                
+            // ── Fallback: model skipped thought block ──
+            if (!accumulated.includes(END_TOKEN)) {
+                inlineLoader.classList.add('hidden');
                 assistantDiv.style.display = 'block';
-                assistantDiv.innerHTML = marked.parse(accumulatedText);
-                finalOutputAccumulator = accumulatedText;
+                finalOutput = accumulated.replace(/```markdown\n?|```/g, '');
+                assistantDiv.innerHTML = marked.parse(finalOutput);
             }
 
-            // Once finished, record assistant's total response.
-            conversationHistory.push({
-                role: "assistant",
-                content: accumulatedText
-            });
-
-            // Save to localStorage
+            // Smart context truncation: keep prompt (index 0) + last 6 messages
+            conversationHistory.push({ role: 'assistant', content: accumulated });
+            if (conversationHistory.length > 7) {
+                conversationHistory = [conversationHistory[0], ...conversationHistory.slice(-6)];
+            }
             saveCurrentChat();
+            window.lastGeneratedItinerary = finalOutput;
 
-            window.lastGeneratedItinerary = finalOutputAccumulator;
-
-        } catch (error) {
-            console.error(error);
-            document.getElementById('status-message').textContent = "An error occurred.";
-            document.getElementById('status-message').style.color = "#f85149";
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                conversationHistory.push({ role: 'assistant', content: accumulated + "\n\n*(Cancelled by user)*" });
+                saveCurrentChat();
+            } else {
+                console.error('runAgenticWorkflow error:', err);
+                assistantDiv.style.display = 'block';
+                assistantDiv.innerHTML = `<p style="color:#ef4444">⚠️ API Error: ${err.message}. Check your HF key.</p>`;
+            }
+        } finally {
+            setInputsDisabled(false);
+            inlineLoader.classList.add('hidden');
+            currentController = null;
         }
     }
-
-    // --- 5. Reset & Download ---
-    document.getElementById('reset-btn').addEventListener('click', () => {
-        document.getElementById('new-chat-btn').click();
-    });
-
-    document.getElementById('download-btn').addEventListener('click', () => {
-        if (!window.lastGeneratedItinerary) return;
-
-        const btn = document.getElementById('download-btn');
-        const originalText = btn.innerText;
-        btn.innerText = "Generating PDF...";
-        btn.disabled = true;
-
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        document.body.appendChild(iframe);
-
-        const content = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>AI_Trip_Itinerary</title>
-                <style>
-                    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #000; line-height: 1.6; }
-                    h1 { color: #3b82f6; text-align: center; margin-bottom: 5px; }
-                    .subtitle { text-align: center; color: #666; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; margin-bottom: 30px; }
-                    h2, h3 { margin-top: 25px; color: #111; }
-                    ul { padding-left: 20px; }
-                    li { margin-bottom: 5px; }
-                    @media print {
-                        @page { margin: 1cm; }
-                    }
-                </style>
-            </head>
-            <body>
-                <h1>Your Dream Itinerary</h1>
-                <p class="subtitle">Generated by AI Trip Planner</p>
-                <div>${marked.parse(window.lastGeneratedItinerary)}</div>
-            </body>
-            </html>
-        `;
-
-        const doc = iframe.contentWindow.document;
-        doc.open();
-        doc.write(content);
-        doc.close();
-
-        setTimeout(() => {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            btn.innerText = originalText;
-            btn.disabled = false;
-            setTimeout(() => document.body.removeChild(iframe), 2000);
-        }, 500);
-    });
-
 });

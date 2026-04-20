@@ -3,72 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Trip Planner - Agentic System</title>
+    <title>AI Trip Planner | Premium Agentic System</title>
+    <meta name="description" content="Plan your dream trip with an expert AI Travel Architect. Get detailed itineraries, flight info, hotel picks and more.">
+    <!-- Premium Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <!-- Google Fonts for premium typography -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Marked.js for parsing Markdown to HTML -->
+    <!-- Essential Libraries (deferred) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- HTML2PDF.js for exporting styled PDFs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
+    <!-- Animated background mesh -->
+    <div class="bg-gradient-mesh"></div>
+
     <div id="app-layout">
-        <!-- ChatGPT-style Sidebar -->
-        <aside class="sidebar">
-            <button id="new-chat-btn" class="ghost-btn sidebar-new-btn">+ New Trip Plan</button>
+
+        <!-- ══════════ SIDEBAR ══════════ -->
+        <div class="sidebar-backdrop hidden" id="sidebar-backdrop"></div>
+        <aside class="sidebar" id="sidebar">
+
+            <h2 class="sidebar-logo">✈ TripAI</h2>
+
+            <button id="new-chat-btn" class="nav-new-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 5v14M5 12h14"/>
+                </svg>
+                <span>New Trip</span>
+            </button>
+
             <div id="chat-history-list" class="chat-list">
-                <p class="sidebar-empty">Loading trips...</p>
+                <p class="sidebar-empty">No past trips yet.</p>
             </div>
-            <button id="clear-history-btn" class="ghost-btn danger-btn sidebar-clear-btn">Clear History</button>
+
+            <div class="sidebar-footer">
+                <button id="clear-history-btn" class="sidebar-util-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/>
+                    </svg>
+                    <span>Clear History</span>
+                </button>
+            </div>
         </aside>
 
-        <!-- Main Content Area -->
-        <div class="main-content">
-            <div class="app-container">
-        <header>
-            <h1 class="gradient-text">AI Trip Planner</h1>
-            <p class="subtitle">Build your dream itinerary with our Agentic Workflow.</p>
-        </header>
-
-        <main>
-            <form id="trip-form" class="glass-panel">
-                <div class="form-group full-width">
-                    <label for="user-prompt">Describe Your Dream Trip</label>
-                    <textarea id="user-prompt" placeholder="e.g. I want a 5-day solo trip to Tokyo next month, focusing on anime culture and amazing street food, with a medium budget... " required></textarea>
-                </div>
-
-                <button type="submit" id="submit-btn" class="primary-btn">Plan My Trip</button>
-            </form>
-
-            <div id="agent-status" class="glass-panel hidden">
-                <div class="status-header" style="justify-content: center; margin-bottom: 0;">
-                    <div class="loader"></div>
-                    <p id="status-message" class="pulse-text" style="font-size: 1.2rem; margin: 0;">Thinking...</p>
+        <!-- ══════════ MAIN CONTENT ══════════ -->
+        <main class="main-content">
+            <!-- Mobile Header -->
+            <div class="mobile-header">
+                <h2 class="mobile-logo">✈ TripAI</h2>
+                <div class="mobile-actions">
+                    <button id="hamburger-btn" class="hamburger-btn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
+            <div class="content-wrapper">
 
-            <div id="results-container" class="glass-panel hidden">
-                <h2 id="results-header">Trip Plan Chat</h2>
-                <div id="itinerary-content" class="chat-feed"></div>
-                
-                <div class="follow-up-section" id="follow-up-section">
-                    <div class="follow-up-input-group">
-                        <textarea id="follow-up-prompt" placeholder="Message the planner..."></textarea>
-                        <button id="follow-up-btn" class="send-btn" title="Send message">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"></path></svg>
+                <!-- Hero -->
+                <header class="app-hero">
+                    <h1 class="premium-heading">AI Trip <span class="accent">Planner</span></h1>
+                    <p class="hero-subtitle">Your intelligent Travel Architect — itineraries, flights, hotels & more.</p>
+                </header>
+
+                <!-- ── Initial Input Panel ── -->
+                <div id="trip-input-container" class="glass-module">
+                    <form id="trip-form">
+                        <div class="input-stack">
+                            <label for="user-prompt">What's on your travel mind? ✈️</label>
+                            <textarea
+                                id="user-prompt"
+                                rows="4"
+                                placeholder="e.g. 'Hi!' or 'Flights from Mumbai to Dubai under ₹15k' or 'Plan 7 days in Japan for 2 people…'"
+                                required
+                            ></textarea>
+                            <button type="submit" id="submit-btn" class="glow-button">
+                                Start Planning &rarr;
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- ── Chat / Results Panel ── -->
+                <div id="results-container" class="glass-module hidden">
+
+                    <!-- Chat feed -->
+                    <div id="itinerary-content" class="chat-flow"></div>
+
+                    <!-- Inline Thinking Indicator -->
+                    <div id="inline-loader" class="thinking-state hidden">
+                        <div class="shimmer-bubble">
+                            <div class="dot-flashing"></div>
+                            <span>Thinking...</span>
+                        </div>
+                        <button id="cancel-stream-btn" class="util-btn-outline" style="margin-left: 1rem; padding: 0.3rem 0.8rem; font-size: 0.8rem; border-color: rgba(239, 68, 68, 0.4); color: #ef4444;">Stop</button>
+                    </div>
+
+                    <!-- Follow-up chat input -->
+                    <div id="follow-up-section" class="chat-input-zone">
+                        <div class="chat-input-wrapper">
+                            <textarea
+                                id="follow-up-prompt"
+                                placeholder="Ask a follow-up — flights, hotels, budget breakdown…"
+                            ></textarea>
+                            <button id="follow-up-btn" class="modern-send" title="Send message">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Action bar -->
+                    <div class="export-actions">
+                        <button id="download-btn" class="util-btn-outline">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                            <span>Save as PDF</span>
                         </button>
                     </div>
-                </div>
 
-                <div class="action-buttons">
-                    <button id="download-btn" class="secondary-btn">Download PDF</button>
-                    <button id="reset-btn" class="ghost-btn">Start Over</button>
-                </div>
-            </div>
+                </div><!-- /#results-container -->
+
+            </div><!-- /.content-wrapper -->
         </main>
-        </div>
-    </div>
+
+    </div><!-- /#app-layout -->
 
     <script src="app.js"></script>
 </body>
